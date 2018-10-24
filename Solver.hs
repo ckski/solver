@@ -1,6 +1,6 @@
 module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_elements, permutation_reducer, unlist, cross_with) where
     import Data.Bool; import Data.List; import Data.Maybe
-    
+
     data Selector = Points [[Int]] | Select [Int -> Bool]
     data Constraint = Matches { predicate :: [Int] -> Bool, selector :: Selector } 
                     | Reducer { reducer :: [[Int]] -> [[Int]], selector :: Selector }
@@ -38,7 +38,6 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
 
     groupOn f = groupBy (\a b -> f a == f b)
 
-
     combos :: [[a]] -> [[a]]  -- Returns the combinations of choosing 1 element from each list.
     combos [] = []
     combos [a] = map (\x -> [x]) a
@@ -46,69 +45,51 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
     combos (x:xs) = cross_with (:) x (combos xs)
 
     generate_field :: [[a]] -> [[a]]  -- Turns a field ( [[1..3],[1..3]] ) into a list of points ( [[1,1],[1,2],..])
-    generate_field dims = gen' dims where
-        gen' [] = [[]]
-        gen' [d] = [d]
-        gen' [d1, d2] = cross_with (\a b -> [a, b]) d1 d2
-        gen' [d1, d2, d3] = cross_with (:) d1 (gen' [d2, d3])
-        gen' [d1, d2, d3, d4] = cross_with (:) d1 (gen' [d2, d3, d4])
+    generate_field [d1, d2] = cross_with (\a b -> [a, b]) d1 d2
+    generate_field [d1, d2, d3] = cross_with (:) d1 (generate_field [d2, d3])
 
     select :: Selector -> [[Int]] -> [[Int]]  -- Apply selector to points. e.g. select [even] [[x,y]] => [[x,y] : x is even]
     select (Points points) = filter (\p -> any (`isPrefixOf` p) points)
     select (Select filters) = filter (test_each_selector) where
-        test_each_selector :: [Int] -> Bool
         test_each_selector val = and $ map ($val) selector_functions
-        selector_functions :: [[Int] -> Bool]
         selector_functions = zipWith (\n p -> (p . (!!(n-1)))) [1..] filters
 
     -- Returns all possible solutions. If you want only one solution, use `take 1 $ solve ..`.
     solve :: [Constraint] -> [[Int]] -> [[[Int]]]
-    solve constraints field = fix_transpose $ solve' (generate_field field) [] where
-        fix_transpose results = fmap (transpose . (unlist num_cols)) results
+    solve constraints field = post_process $ solve' (generate_field field) [] where
+        post_process results = fmap (transpose . (unlist num_cols)) $ filter (/=[]) $ results
 
-        num_cols = (product $ map length (init . init $ field))
-        num_values = product $ map (toInteger . length) (init field)
+        num_cols = product $ map length (init . init $ field)
+        num_values = product $ map length (init field)
+        length_constraint = Reducer (\vec -> if length vec >= num_values then vec else []) (Select [])
 
         solve' solver_step acc = let
-
             pop = if null acc then [] else solve' (head acc) (tail acc)  -- Pop next option off stack.
-            push = solve' with_target (without_target:acc)               -- Solve with, push without to stack.
-            continue = solve' new_points acc                             -- Repeat applying the constraints.
-            return = [concat value_options]
 
-            new_points = apply_constraints constraints solver_step
-            double_check = apply_constraints constraints new_points
-
-            value_options = (map . map) last $ groupOn init new_points
-            value_positions = nub $ (map init) new_points
+            new_points = apply_constraints (length_constraint:constraints) solver_step
+            options = (map . map) last $ groupOn init new_points
+            positions = nub $ (map init) new_points
 
             target = fromJust $ findIndex (==t_val) lengths
-                where lengths = map length value_options; t_val = head $ filter (>1) lengths          
+                where lengths = map length options; t_val = head $ filter (>1) lengths          
+            with_target = new_points \\ [(positions !! target) ++ [v] | v <- last field, v /= head (options !! target)]
+            without_target = new_points \\ [(positions !! target) ++ [head (options !! target)]]
 
-            with_target = new_points \\ [(value_positions !! target) ++ [v] | v <- last field, v /= head (value_options !! target)]
-            without_target = new_points \\ [(value_positions !! target) ++ [head (value_options !! target)]]
-
-            in (if (toInteger $ length value_options) < num_values then -- If fewer options than needed, fail.
-                    pop
-                else if all (==1) (map length value_options) then  -- One option left for each value.
-                    if (length double_check) == 0 then pop else return ++ pop
-                else if length new_points == length solver_step then
-                    push   -- No progress was made so go to guessing strategy.
-                else
-                    continue
-            )
+            in ( if all (==1) (map length options) then [concat options] ++ pop  -- One option left for each value.
+                 else solve' with_target (without_target:acc) )         -- Split into two branches, push one branch to acc.
 
     apply_constraints constraints = apply' where
-        apply' points = foldl' (update_points) points constraints where  -- Apply each constraint in sequence.
+        -- Apply each constraint in sequence, then repeat if there's fewer options until no progress is made.
+        apply' points = if length points /= length new_points then apply' new_points else new_points where
+            new_points = foldl' (update_points) points constraints
+            
             update_points points constraint = let
                 selected_points = select (selector $ constraint) points -- List of points
-                -- list of points to list of value options, [[1,1],[1,2],[2,3]] => [[1,2],[3]]
-                options = (map . map) last $ groupOn init selected_points
+                options = (map . map) last $ groupOn init selected_points -- [[1,1],[1,2],[2,3]] => [[1,2],[3]]
                 positions = nub $ map init selected_points   -- [[1,1],[1,2],[2,3]] => [[1],[2]]
                 
                 new_options = apply_reducer constraint options positions
-
-                in ( points \\ (selected_points \\ new_options) )  -- Remove options that did not pass constraint. 
+                in ( points \\ (selected_points \\ new_options)  )
 
     -- Applying a `Matches` constraint is reducing by filtering the combinations with the `Matches` predicate.
     apply_reducer (Matches predicate _) options positions = to_point_list . (filter predicate) . combos $ options

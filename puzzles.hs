@@ -8,43 +8,33 @@ import Text.Printf
 import System.Environment
 import System.CPUTime
 
-import Debug.Trace
+-- main = demo
+main = zed zed07
 
--- import Control.Parallel.Strategies
-
--- main = 
-
--- main = do
---     t1 <- getCPUTime
---     (zed zed06)
---     t2 <- getCPUTime
---     let t = fromIntegral (t2-t1) * 1e012 :: Double
---     printf "\nTime: %02.fs\n" t
-
--- main = do 
---     args <- getArgs
---     n_queens (read $ head args)
-
+demo = mapM_ (\(t, f) -> do
+        (putStrLn (t ++ "\n")) 
+        t1 <- getCPUTime
+        (f)
+        t2 <- getCPUTime
+        let t = fromIntegral (t2-t1) * 1e-12 :: Double
+        printf "\nTime: %0.2fs\n-------------------------------------\n" t
+        ) [("zed " ++ (show zed02), zed zed02), 
+           ("zed " ++ (show zed03), zed zed03), 
+           ("zed " ++ (show zed04), zed zed04), 
+           ("zed " ++ (show zed05), zed zed05), 
+           ("zed " ++ (show zed06), zed zed06),
+           ("Sudoku Puzzle", sudoku sudoku01),
+           ("N Queens Problem, n = 6", n_queens 6),
+           ("N Queens Problem, n = 10", n_queens 10),
+           ("Kenken Puzzle", kenken kenken09),
+           ("Kakuro Puzzle", kakuro kakuro01)]
 
 -- Timings done using compiled binary on Intel i7-7700 (4GHz).
 -- compile command: $ ghc puzzles.hs -O2 -fexcess-precision -optc-O3 -optc-ffast-math
 
--- zed06 0.2s
--- zed07 8s
--- zed08 385s 
-
--- n_queens 8 => 0.5s   (all 92 solutions)
--- n_queens 14 => 3s    (first solution)
--- n_queens 16 => 21s
-
--- sudoku08 => 0.2s
--- sudoku12 => 0.2s
--- sudoku16 => 0.8s
--- sudoku17 => 165s
-
-
--- main = zed zed08
-main = zed zed07
+-- zed06 0.2s   |   sudoku12 => 0.2s     |   n_queens 8 => 0.5s   (all 92 solutions)
+-- zed07 8s     |   sudoku16 => 0.8s     |   n_queens 14 => 3s    (first solution)
+-- zed08 385s   |   sudoku17 => 165s     |   n_queens 16 => 21s
 
 ---------------------------------------------------------------------------------------------------
 -- Solver API Usage
@@ -53,7 +43,7 @@ main = zed zed07
 -- Solver.solve [Constraint] [[1..n],[1..n],[1..n]] => [[a,b,c,d,]]
 
 -- Constraint is one of:
--- Matches (predicate on list of values) Selector
+-- Matches (predicate on selected values) Selector
 -- Reducer ([[Int]] -> [[Int]] reducer function) Selector
 
 -- Selector is one of:
@@ -64,6 +54,8 @@ main = zed zed07
 -- Zed Puzzles
 ---------------------------------------------------------------------------------------------------
 
+zed02 = ([2,1],[1,2],[2,1],[1,2]) :: ([Int],[Int],[Int],[Int])
+zed03 = ([0,1,2,0],[0,0,0,2],[3,0,3,0],[0,0,0,0]) :: ([Int],[Int],[Int],[Int])
 zed04 = ([1,3,2,2],[3,2,1,2],[2,2,1,3],[2,2,3,1]) :: ([Int],[Int],[Int],[Int])
 zed05 = ([1,2,3,4,2],[5,1,3,2,2],[2,2,1,3,3],[2,4,2,2,1]) :: ([Int],[Int],[Int],[Int])
 zed06 = ([3,3,2,4,2,1],[1,4,3,4,2,2],[2,1,2,4,2,3],[2,2,2,1,3,4]) :: ([Int],[Int],[Int],[Int])
@@ -85,14 +77,12 @@ zed_constraints :: ([(Int, Int)], [(Int, Int)]) -> [Constraint]
 zed_constraints clues = let
     n = length (fst clues)
     count_two_way list = (zed_count list, zed_count . reverse $ list)
-    (==?) _ (0,0) = True           -- Using ==? allows to check opposite clues at the same time.
+    (==?) _ (0,0) = True           -- If a clue is set to zero, then matching with it => True.
     (==?) (_,a) (0,b) = a == b
     (==?) (a,_) (b,0) = a == b
     (==?) a b = a == b
-    in (   [Matches ((==?((fst clues) !! (x-1))) . count_two_way) (Select [(==x), truth]) | x <- [1..n]]
-        ++ [Matches ((==?((snd clues) !! (y-1))) . count_two_way) (Select [truth, (==y)]) | y <- [1..n]]
-        ++ [Matches (has_n_unique_elements n) (Select [(==x), truth]) | x <- [1..n]]
-        ++ [Matches (has_n_unique_elements n) (Select [truth, (==y)]) | y <- [1..n]] )
+    in (   [Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((fst clues) !! (x-1)))) (Select [(==x), truth]) | x <- [1..n]]
+        ++ [Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((snd clues) !! (y-1)))) (Select [truth, (==y)]) | y <- [1..n]] )
 
 zed_count = fst . foldl' (\(c,m) n -> (bool c (c+1) (n > m), max n m) ) (0,0)
 
