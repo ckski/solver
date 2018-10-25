@@ -56,16 +56,14 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
 
     -- Returns all possible solutions. If you want only one solution, use `take 1 $ solve ..`.
     solve :: [Constraint] -> [[Int]] -> [[[Int]]]
-    solve constraints field = post_process $ solve' (generate_field field) [] where
+    solve constraints field = post_process $ solve' (generate_field field) where
         post_process results = fmap (transpose . (unlist num_cols)) $ filter (/=[]) $ results
 
         num_cols = product $ map length (init . init $ field)
         num_values = product $ map length (init field)
         length_constraint = Reducer (\vec -> if length vec >= num_values then vec else []) (Select [])
 
-        solve' solver_step acc = let
-            pop = if null acc then [] else solve' (head acc) (tail acc)  -- Pop next option off stack.
-
+        solve' solver_step = let
             new_points = apply_constraints (length_constraint:constraints) solver_step
             options = (map . map) last $ groupOn init new_points
             positions = nub $ (map init) new_points
@@ -75,8 +73,8 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
             with_target = new_points \\ [(positions !! target) ++ [v] | v <- last field, v /= head (options !! target)]
             without_target = new_points \\ [(positions !! target) ++ [head (options !! target)]]
 
-            in ( if all (==1) (map length options) then [concat options] ++ pop  -- One option left for each value.
-                 else solve' with_target (without_target:acc) )         -- Split into two branches, push one branch to acc.
+            in ( if all (==1) (map length options) then [concat options] -- One option left for each value or empty list.
+                 else (solve' with_target) ++ (solve' without_target) )  -- Split into two branches, push one branch to acc.
 
     apply_constraints constraints = apply' where
         -- Apply each constraint in sequence, then repeat if there's fewer options until no progress is made.
