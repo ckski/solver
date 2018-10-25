@@ -9,6 +9,7 @@ import System.Environment
 import System.CPUTime
 
 -- main = demo
+
 main = zed zed07
 
 demo = mapM_ (\(t, f) -> do
@@ -32,9 +33,10 @@ demo = mapM_ (\(t, f) -> do
 -- Timings done using compiled binary on Intel i7-7700 (4GHz).
 -- compile command: $ ghc puzzles.hs -O2 -fexcess-precision -optc-O3 -optc-ffast-math
 
--- zed06 0.2s   |   sudoku12 => 0.2s     |   n_queens 8 => 0.5s   (all 92 solutions)
--- zed07 8s     |   sudoku16 => 0.8s     |   n_queens 14 => 3s    (first solution)
--- zed08 385s   |   sudoku17 => 165s     |   n_queens 16 => 21s
+-- zed06 0.15s   |   sudoku12 => 0.2s     |   n_queens 8 => 0.5s   (all 92 solutions)
+-- zed07 1.6s    |   sudoku16 => 0.8s     |   n_queens 14 => 3s    (first solution)
+-- zed08 36s     |   sudoku17 => 165s     |   n_queens 16 => 21s
+-- zed09 33m16s
 
 ---------------------------------------------------------------------------------------------------
 -- Solver API Usage
@@ -61,6 +63,7 @@ zed05 = ([1,2,3,4,2],[5,1,3,2,2],[2,2,1,3,3],[2,4,2,2,1]) :: ([Int],[Int],[Int],
 zed06 = ([3,3,2,4,2,1],[1,4,3,4,2,2],[2,1,2,4,2,3],[2,2,2,1,3,4]) :: ([Int],[Int],[Int],[Int])
 zed07 = ([3,1,2,3,3,4,2],[3,1,3,4,2,2,4],[3,3,2,3,1,2,4],[3,4,2,1,3,3,2]) :: ([Int],[Int],[Int],[Int])
 zed08 = ([3,4,3,2,2,1,4,3],[2,4,4,1,5,2,3,2],[3,1,2,2,4,3,2,3],[3,2,3,3,3,1,4,5]) :: ([Int],[Int],[Int],[Int])
+zed09 = ([3,3,3,2,2,1,2,3,4],[4,3,3,4,2,2,3,2,1],[1,2,4,7,3,3,2,5,4],[3,4,2,2,5,1,2,3,6]) :: ([Int],[Int],[Int],[Int])
 
 zed :: ([Int],[Int],[Int],[Int]) -> IO ()
 zed clues = show_solution $ take 1 $ Solver.solve (zed_constraints clues') [[1..n],[1..n],[1..n]] where
@@ -81,8 +84,11 @@ zed_constraints clues = let
     (==?) (_,a) (0,b) = a == b
     (==?) (a,_) (b,0) = a == b
     (==?) a b = a == b
-    in (   [Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((fst clues) !! (x-1)))) (Select [(==x), truth]) | x <- [1..n]]
-        ++ [Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((snd clues) !! (y-1)))) (Select [truth, (==y)]) | y <- [1..n]] )
+    in (   concat [[Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((fst clues) !! (i-1)))) (Select [(==i), truth]),
+            Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((snd clues) !! (i-1)))) (Select [truth, (==i)])] | i <- [1..n]] )
+
+    -- in (   [Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((fst clues) !! (x-1)))) (Select [(==x), truth]) | x <- [1..n]]
+        -- ++ [Matches (\vec -> has_n_unique_elements n vec && (count_two_way vec ==? ((snd clues) !! (y-1)))) (Select [truth, (==y)]) | y <- [1..n]] )
 
 zed_count = fst . foldl' (\(c,m) n -> (bool c (c+1) (n > m), max n m) ) (0,0)
 
@@ -148,11 +154,24 @@ sudoku_constraints :: [[Int]] -> [Constraint]
 sudoku_constraints clues = let
     cell_clue i j = [clues !! (j-1) !! (i-1)]
     box_selectors = cross_with (\a b -> Select [(`elem` a),(`elem` b)]) [[1,2,3],[4,5,6],[7,8,9]] [[1,2,3],[4,5,6],[7,8,9]]
-    in (   [Matches (==(cell_clue x y)) (Select [(==x), (==y)]) | x <- [1..9], y <- [1..9], (cell_clue x y) /= [0]]
-        ++ [Reducer (permutation_reducer) (Select [(==x), truth]) | x <- [1..9]]  -- Column permuation
-        ++ [Reducer (permutation_reducer) (Select [truth, (==y)]) | y <- [1..9]]  -- Row permutation
-        ++ (map (Reducer (permutation_reducer)) box_selectors) )                        -- 3x3 box permutation
+    
+    -- box_selectors = cross_with (\a b -> 
+    --     concat [ [Matches (==(cell_clue x y)) (Select [(==x), (==y)]) | x <- a, y <- b, (cell_clue x y) /= [0]], 
+    --       -- [Reducer permutation_reducer (Select [(==a), truth])],
+    --       [Reducer permutation_reducer (Select [(`elem` a),(`elem` b)])]
+    --     ]) [[1,2,3],[4,5,6],[7,8,9]] [[1,2,3],[4,5,6],[7,8,9]]
+    -- in (   (concat box_selectors)
+    --        -- [Matches (==(cell_clue x y)) (Select [(==x), (==y)]) | x <- [1..9], y <- [1..9], (cell_clue x y) /= [0]]
+    --     ++ [Reducer (permutation_reducer) (Select [(==x), truth]) | x <- [1..9]]  -- Column permuation
+    --     ++ [Reducer (permutation_reducer) (Select [truth, (==y)]) | y <- [1..9]]  -- Row permutation
+    --     -- ++ (map (Reducer (permutation_reducer)) box_selectors) )                        -- 3x3 box permutation
+    --     )
 
+    in (   (map (Reducer (permutation_reducer)) box_selectors)                         -- 3x3 box permutation
+        ++ [Matches (==(cell_clue x y)) (Select [(==x), (==y)]) | x <- [1..9], y <- [1..9], (cell_clue x y) /= [0]]
+        ++ (concat [[Reducer (permutation_reducer) (Select [(==i), truth]),   -- Column permuation
+                     Reducer (permutation_reducer) (Select [truth, (==i)])] | i <- [1..9]])  )   -- Row permutation
+        
 
 ---------------------------------------------------------------------------------------------------
 -- Kenken Puzzles

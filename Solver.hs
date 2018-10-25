@@ -84,7 +84,7 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
             new_points = foldl' (update_points) points constraints
             
             update_points points constraint = let
-                selected_points = select (selector $ constraint) points -- List of points
+                selected_points = select (selector $ constraint) points
                 options = (map . map) last $ groupOn init selected_points -- [[1,1],[1,2],[2,3]] => [[1,2],[3]]
                 positions = nub $ map init selected_points   -- [[1,1],[1,2],[2,3]] => [[1],[2]]
                 
