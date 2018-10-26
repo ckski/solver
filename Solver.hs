@@ -50,9 +50,7 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
 
     select :: Selector -> [[Int]] -> [[Int]]  -- Apply selector to points. e.g. select [even] [[x,y]] => [[x,y] : x is even]
     select (Points points) = filter (\p -> any (`isPrefixOf` p) points)
-    select (Select filters) = filter (test_each_selector) where
-        test_each_selector val = and $ map ($val) selector_functions
-        selector_functions = zipWith (\n p -> (p . (!!(n-1)))) [1..] filters
+    select (Select filters) = filter (and . (zipWith ($) filters))
 
     -- Returns all possible solutions. If you want only one solution, use `take 1 $ solve ..`.
     solve :: [Constraint] -> [[Int]] -> [[[Int]]]
