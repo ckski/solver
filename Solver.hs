@@ -44,17 +44,13 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
     combos [a,b] = cross_with (\a b -> [a, b]) a b
     combos (x:xs) = cross_with (:) x (combos xs)
 
-    generate_field :: [[a]] -> [[a]]  -- Turns a field ( [[1..3],[1..3]] ) into a list of points ( [[1,1],[1,2],..])
-    generate_field [d1, d2] = cross_with (\a b -> [a, b]) d1 d2
-    generate_field [d1, d2, d3] = cross_with (:) d1 (generate_field [d2, d3])
-
     select :: Selector -> [[Int]] -> [[Int]]  -- Apply selector to points. e.g. select [even] [[x,y]] => [[x,y] : x is even]
     select (Points points) = filter (\p -> any (`isPrefixOf` p) points)
     select (Select filters) = filter (and . (zipWith ($) filters))
 
     -- Returns all possible solutions. If you want only one solution, use `take 1 $ solve ..`.
     solve :: [Constraint] -> [[Int]] -> [[[Int]]]
-    solve constraints field = post_process $ solve' (generate_field field) where
+    solve constraints field = post_process $ solve' (combos field) where
         post_process results = fmap (transpose . (unlist num_cols)) $ filter (/=[]) $ results
 
         num_cols = product $ map length (init . init $ field)
