@@ -45,19 +45,19 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
     select (Points points) = filter (\p -> any (`isPrefixOf` p) points)
     select (Select filters) = filter (and . (zipWith ($) filters))
 
+    split_points points = ((map . map) last $ groupOn init points, nub $ map init points)
+
     -- Returns all possible solutions. If you want only one solution, use `take 1 $ solve ..`.
     solve :: [Constraint] -> [[Int]] -> [[[Int]]]
     solve constraints field = post_process $ solve' (combos field) where
-        post_process results = fmap (transpose . (unlist num_cols)) $ filter (/=[]) $ results
+        post_process = (fmap $ transpose . (unlist (length (field !! 1)))) . (filter (/=[]))
 
-        num_cols = product $ map length (init . init $ field)
         num_values = product $ map length (init field)
         length_constraint = Reducer (\vec -> if length vec >= num_values then vec else []) (Select [])
 
         solve' solver_step = let
             new_points = apply_constraints (length_constraint:constraints) solver_step
-            options = (map . map) last $ groupOn init new_points
-            positions = nub $ (map init) new_points
+            (options, positions) = split_points new_points
 
             (Just target) = findIndex (==t_val) lengths
                 where lengths = map length options; t_val = head $ filter (>1) lengths          
@@ -74,11 +74,8 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
             
             update_points points constraint = let
                 selected_points = select (selector $ constraint) points
-                options = (map . map) last $ groupOn init selected_points -- [[1,1],[1,2],[2,3]] => [[1,2],[3]]
-                positions = nub $ map init selected_points   -- [[1,1],[1,2],[2,3]] => [[1],[2]]
-                
-                new_options = apply_reducer constraint options positions
-                in ( points \\ (selected_points \\ new_options)  )
+                new_options = uncurry (apply_reducer constraint) (split_points selected_points)
+                in ( points \\ (selected_points \\ new_options) )
 
     -- Applying a `Matches` constraint is reducing by filtering the combinations with the `Matches` predicate.
     apply_reducer (Matches predicate _) options positions = to_point_list . (filter predicate) . combos $ options
