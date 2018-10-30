@@ -1,5 +1,5 @@
 module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_elements, permutation_reducer, unlist, cross_with) where
-    import Data.Bool; import Data.List; import Data.Maybe
+    import Data.List
 
     data Selector = Points [[Int]] | Select [Int -> Bool]
     data Constraint = Matches { predicate :: [Int] -> Bool, selector :: Selector } 
@@ -16,15 +16,12 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
 
         -- Tests if the options in the sequence are the only allowable ones for the set.
         -- [[1,0,0,0]] => True, [[1,1,0,0],[1,1,0,0]] => True
-        test_seqs (seq1:seqs) | (sum seq1) == s = all (==seq1) seqs where s = 1 + length seqs; n = length seq1
+        test_seqs (seq1:seqs) | (sum seq1) == s = all (==seq1) seqs where s = 1 + length seqs
         test_seqs _ = False
 
         subs = tail $ subsequences [0..(n-1)] where n = length options -- Subsequences of the options to search.
 
-        -- Returns a list of sequences which can be used in reduction.
-        test_subsequences bitmap = catMaybes $ map (\seqs -> bool Nothing (Just seqs) (test_seqs (map (bitmap!!) seqs))) $ subs
-
-        reduced_cols = foldl' apply_reduction options (test_subsequences bitmapped)
+        reduced_cols = foldl' apply_reduction options (filter (test_seqs . (map (bitmapped!!))) subs)
 
         apply_reduction options seq = zipWith (\i list -> if i `elem` seq then vals else list\\vals) [0..] options
             where vals = options !! (head seq)
@@ -62,7 +59,7 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
             options = (map . map) last $ groupOn init new_points
             positions = nub $ (map init) new_points
 
-            target = fromJust $ findIndex (==t_val) lengths
+            (Just target) = findIndex (==t_val) lengths
                 where lengths = map length options; t_val = head $ filter (>1) lengths          
             with_target = new_points \\ [(positions !! target) ++ [v] | v <- last field, v /= head (options !! target)]
             without_target = new_points \\ [(positions !! target) ++ [head (options !! target)]]
