@@ -154,8 +154,6 @@ def sudoku_constraints(clues):
 
 def sudoku(clues):
     solution = next(solve(sudoku_constraints(format_sudoku_clues(clues)), [range(1,10),range(1,10),range(1,10)]))
-    # show_solution [] = putStrLn "No solution found"
-    # show_solution [solution] = show_sudoku_solution solution
 
     def show_sudoku_solution(grid): 
         dash_line = '-'*21 + "\n"
