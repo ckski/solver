@@ -33,8 +33,6 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
     cross_with :: (a -> b -> c) -> [a] -> [b] -> [c]
     cross_with f a b = [f a' b' | a' <- a, b' <- b]
 
-    groupOn f = groupBy (\a b -> f a == f b)
-
     combos :: [[a]] -> [[a]]  -- Returns the combinations of choosing 1 element from each list.
     combos [] = []
     combos [a] = map (\x -> [x]) a
@@ -45,6 +43,7 @@ module Solver ( Constraint (..), Selector (..), solve, truth, has_n_unique_eleme
     select (Points points) = filter (\p -> any (`isPrefixOf` p) points)
     select (Select filters) = filter (and . (zipWith ($) filters))
 
+    groupOn f = groupBy (\a b -> f a == f b)
     split_points points = ((map . map) last $ groupOn init points, nub $ map init points)
 
     -- Returns all possible solutions. If you want only one solution, use `take 1 $ solve ..`.
